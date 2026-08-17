@@ -14,19 +14,19 @@
 #define DB "hr"
 #define PORT 3306
 
-#define RING_SIZE 1024          // 缓冲区容量
-#define BATCH_SIZE 20           // 批量写入最大条数
+#define RING_SIZE 1024
+#define BATCH_SIZE 20
 #define WAIT_TIMEOUT_MS 1000
-#define SAMPLE_INTERVAL_SEC 5   // 两次 /proc/stat 采样的间隔
+#define SAMPLE_INTERVAL_SEC 5
 
 typedef struct
 {
     int sensor_id;
-    double value;   // 存放 CPU 使用率 (%)
+    double value;
     time_t ts;
 } SensorRecord;
 
-// ---------- 环形缓冲区 ----------
+
 typedef struct
 {
     SensorRecord data[RING_SIZE];
@@ -68,8 +68,7 @@ int ring_pop_batch(RingBuffer *rb, SensorRecord *out, int max)
     return n;
 }
 
-// ---------- /proc/stat CPU 采样 ----------
-// 只取前 7 个字段: user nice system idle iowait irq softirq
+
 typedef struct
 {
     long long user;
@@ -81,7 +80,7 @@ typedef struct
     long long softirq;
 } CpuStats;
 
-// 读取 /proc/stat 第一行（cpu 聚合行）的 jiffies
+
 int read_cpu_stats(CpuStats *s)
 {
     FILE *fp = fopen("/proc/stat", "r");
@@ -100,7 +99,7 @@ int read_cpu_stats(CpuStats *s)
     }
     fclose(fp);
 
-    // 第一行是 "cpu  user nice system idle iowait irq softirq ..."
+
     if (sscanf(line, "cpu %lld %lld %lld %lld %lld %lld %lld",
                &s->user, &s->nice, &s->system, &s->idle,
                &s->iowait, &s->irq, &s->softirq) != 7)
@@ -111,10 +110,7 @@ int read_cpu_stats(CpuStats *s)
     return 0;
 }
 
-// 基于两次采样的增量计算 CPU 使用率(%)
-// 总时间 = user+nice+system+idle+iowait+irq+softirq
-// 工作时间 = 总时间 - idle
-// 使用率 = (工作时间增量 / 总时间增量) * 100
+
 double calc_cpu_usage(const CpuStats *prev, const CpuStats *cur)
 {
     long long total_prev = prev->user + prev->nice + prev->system +
@@ -134,7 +130,7 @@ double calc_cpu_usage(const CpuStats *prev, const CpuStats *cur)
     return (double)work_delta / (double)total_delta * 100.0;
 }
 
-// ---------- MySQL 批量写入 ----------
+
 void build_insert_sql(int n, char *sql)
 {
     strcpy(sql, "INSERT INTO sensor_data(sensor_id, ts, value) VALUES ");
@@ -220,15 +216,15 @@ int batch_insert(MYSQL *conn, SensorRecord *batch, int n)
         return -1;
     }
 
-    mysql_autocommit(conn, 0);  // 关闭自动提交，开启事务
+    mysql_autocommit(conn, 0);
 
     if (mysql_stmt_execute(stmt) != 0)
     {
         fprintf(stderr, "execute failed: %s\n", mysql_stmt_error(stmt));
-        mysql_rollback(conn);       // 执行失败，回滚
-        mysql_autocommit(conn, 1);  // 恢复自动提交
-        mysql_stmt_close(stmt);     // 关闭语句句柄
-        return -1;                  // 失败必须返回，不再继续 commit
+        mysql_rollback(conn);
+        mysql_autocommit(conn, 1);
+        mysql_stmt_close(stmt);
+        return -1;
     }
 
     mysql_commit(conn);
@@ -262,7 +258,7 @@ int main(int argc, char const *argv[])
     struct timespec last_write;
     clock_gettime(CLOCK_MONOTONIC, &last_write);
 
-    // 第一次采样作为基准（单次读取无法计算使用率，必须有前值）
+
     CpuStats prev_stats, cur_stats;
     if (read_cpu_stats(&prev_stats) != 0)
     {
@@ -274,7 +270,6 @@ int main(int argc, char const *argv[])
 
     for (int i = 0; i < total_samples; i++)
     {
-        // 间隔采样：等待后再读第二次，才能算出该时段内的 CPU 使用率
         sleep(SAMPLE_INTERVAL_SEC);
 
         if (read_cpu_stats(&cur_stats) != 0)
@@ -282,11 +277,11 @@ int main(int argc, char const *argv[])
 
         double usage = calc_cpu_usage(&prev_stats, &cur_stats);
 
-        rec.sensor_id = 1;          // 1 代表整机 CPU 聚合
-        rec.value = usage;          // 写入 CPU 使用率(%)
+        rec.sensor_id = 1;
+        rec.value = usage;
         rec.ts = time(NULL);
 
-        // 环形缓冲区满则直接丢弃，不再写本地兜底文件
+
         if (ring_push(&rb, rec) != 0)
         {
             fprintf(stderr, "ring buffer full, drop sample #%d\n", i);
@@ -311,11 +306,10 @@ int main(int argc, char const *argv[])
             }
         }
 
-        // 当前采样作为下一次的前值
         prev_stats = cur_stats;
     }
 
-    // 循环结束后冲刷剩余数据
+
     if (rb.count > 0)
     {
         int n = ring_pop_batch(&rb, batch, BATCH_SIZE);
@@ -332,4 +326,4 @@ int main(int argc, char const *argv[])
 
 
 
-// gcc -o cpu_sensor cpu_sensor.c -lmysqlclient
+// cc mysql_t.c -o h -lmysqlclient
