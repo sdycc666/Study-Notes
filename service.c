@@ -10,14 +10,13 @@
 
 int main(int argc, char const *argv[])
 {
-    // 1. 创建socket
-    int s_fd = socket(AF_INET, SOCK_STREAM, 0);
+        int s_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (s_fd == -1) {
         perror("socket创建失败");
         exit(EXIT_FAILURE);
     }
 
-    // 2. 设置地址复用
+
     int opt = 1;
     if (setsockopt(s_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         perror("setsockopt失败");
@@ -25,7 +24,7 @@ int main(int argc, char const *argv[])
         exit(EXIT_FAILURE);
     }
 
-    // 3. 绑定地址和端口
+
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
@@ -38,7 +37,7 @@ int main(int argc, char const *argv[])
         exit(EXIT_FAILURE);
     }
 
-    // 4. 监听
+
     if (listen(s_fd, 10) == -1) {
         perror("listen失败");
         close(s_fd);
@@ -48,7 +47,7 @@ int main(int argc, char const *argv[])
     printf("✓ HTTP服务器已启动，监听端口: 8080\n");
     printf("  访问地址: http://localhost:8080\n\n");
 
-    // 5. 响应内容（固定HTML）
+
     const char *html_content = 
         "<html><body>"
         "<h1>Hello! 浏览器连接成功！</h1>"
@@ -65,7 +64,7 @@ int main(int argc, char const *argv[])
         "%s",
         strlen(html_content), html_content);
 
-    // 6. 主循环：处理客户端请求
+
     while (1) {
         struct sockaddr_in client_addr;
         socklen_t len = sizeof(client_addr);
