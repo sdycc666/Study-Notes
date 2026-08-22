@@ -4,8 +4,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+long long dir_count;
+long long file_count;
+long long line_count;
 
 
+long long get_line()
+{
+
+}
 
 
 
@@ -17,6 +24,7 @@ int main(int argc, char const *argv[])
         perror("无法打开\n");
         return EXIT_FAILURE;
     }
+
 
 
 
